@@ -1,0 +1,39 @@
+{
+  "_format": "hh3-sol-build-info-1",
+  "id": "solc-0_8_28-4c096cdfd78ad1837e18ef50b6b8e14dfb38aa4c",
+  "solcVersion": "0.8.28",
+  "solcLongVersion": "0.8.28+commit.7893614a",
+  "userSourceNameMap": {
+    "contracts/EnergyMarketplace.sol": "project/contracts/EnergyMarketplace.sol"
+  },
+  "input": {
+    "language": "Solidity",
+    "settings": {
+      "evmVersion": "cancun",
+      "optimizer": {
+        "enabled": true,
+        "runs": 200
+      },
+      "outputSelection": {
+        "*": {
+          "": [
+            "ast"
+          ],
+          "*": [
+            "abi",
+            "evm.bytecode",
+            "evm.deployedBytecode",
+            "evm.methodIdentifiers",
+            "metadata"
+          ]
+        }
+      },
+      "remappings": []
+    },
+    "sources": {
+      "project/contracts/EnergyMarketplace.sol": {
+        "content": "// SPDX-License-Identifier: MIT\npragma solidity ^0.8.20;\n\ncontract EnergyMarketplace {\n    struct Offer {\n        uint256 id;\n        address seller;\n        uint256 unitsMilliKwh;\n        uint256 remainingMilliKwh;\n        uint256 pricePerKwhWei;\n        bool active;\n    }\n\n    uint256 public offerCount;\n    mapping(uint256 => Offer) public offers;\n\n    event OfferListed(\n        uint256 indexed offerId,\n        address indexed seller,\n        uint256 unitsMilliKwh,\n        uint256 pricePerKwhWei\n    );\n    event OfferPurchased(\n        uint256 indexed offerId,\n        address indexed buyer,\n        uint256 unitsMilliKwh,\n        uint256 totalPaidWei\n    );\n    event OfferCancelled(uint256 indexed offerId, address indexed seller);\n\n    function listOffer(uint256 unitsMilliKwh, uint256 pricePerKwhWei) external returns (uint256) {\n        require(unitsMilliKwh > 0, \"units=0\");\n        require(pricePerKwhWei > 0, \"price=0\");\n\n        offerCount += 1;\n        offers[offerCount] = Offer({\n            id: offerCount,\n            seller: msg.sender,\n            unitsMilliKwh: unitsMilliKwh,\n            remainingMilliKwh: unitsMilliKwh,\n            pricePerKwhWei: pricePerKwhWei,\n            active: true\n        });\n\n        emit OfferListed(offerCount, msg.sender, unitsMilliKwh, pricePerKwhWei);\n        return offerCount;\n    }\n\n    function buyOffer(uint256 offerId, uint256 unitsMilliKwh) external payable {\n        Offer storage offer = offers[offerId];\n        require(offer.active, \"inactive\");\n        require(unitsMilliKwh > 0, \"units=0\");\n        require(unitsMilliKwh <= offer.remainingMilliKwh, \"insufficient-units\");\n\n        uint256 costWei = (unitsMilliKwh * offer.pricePerKwhWei) / 1000;\n        require(msg.value >= costWei, \"insufficient-value\");\n\n        offer.remainingMilliKwh -= unitsMilliKwh;\n        if (offer.remainingMilliKwh == 0) {\n            offer.active = false;\n        }\n\n        (bool paid, ) = payable(offer.seller).call{value: costWei}(\"\");\n        require(paid, \"seller-payment-failed\");\n\n        if (msg.value > costWei) {\n            (bool refunded, ) = payable(msg.sender).call{value: msg.value - costWei}(\"\");\n            require(refunded, \"refund-failed\");\n        }\n\n        emit OfferPurchased(offerId, msg.sender, unitsMilliKwh, costWei);\n    }\n\n    function cancelOffer(uint256 offerId) external {\n        Offer storage offer = offers[offerId];\n        require(offer.active, \"inactive\");\n        require(offer.seller == msg.sender, \"not-seller\");\n        offer.active = false;\n        emit OfferCancelled(offerId, msg.sender);\n    }\n\n    function getActiveOffers() external view returns (Offer[] memory) {\n        uint256 activeCount = 0;\n        for (uint256 i = 1; i <= offerCount; i++) {\n            if (offers[i].active) {\n                activeCount++;\n            }\n        }\n\n        Offer[] memory result = new Offer[](activeCount);\n        uint256 index = 0;\n        for (uint256 i = 1; i <= offerCount; i++) {\n            if (offers[i].active) {\n                result[index] = offers[i];\n                index++;\n            }\n        }\n        return result;\n    }\n}\n"
+      }
+    }
+  }
+}
